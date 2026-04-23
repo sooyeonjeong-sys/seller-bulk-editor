@@ -452,193 +452,208 @@ with st.sidebar:
         delay = st.slider("요청 간 딜레이 (초)", 0.2, 2.0, 0.5, 0.1)
 
     with st.expander("📋 작업 아카이브", expanded=False):
-        archive_names = st.session_state.get("archive_names", {})
-
-        # 상품명 조회 버튼
-        col_a, col_b = st.columns([2, 1])
-        with col_a:
-            st.markdown(
-                f'<div style="font-size:11px;color:#9b9da2;padding-top:6px;">'
-                f'[빠른배송] 적용 상품 {len(ARCHIVED_CODES)}개</div>',
-                unsafe_allow_html=True,
-            )
-        with col_b:
-            fetch_names_btn = st.button("상품명 조회", key="fetch_names")
-
-        if fetch_names_btn:
-            if not token:
-                st.warning("⚙ 설정에서 Seller Token을 먼저 입력하세요.")
-                st.stop()
-            h = make_headers(token)
-            names = {}
-            urls = {}
-            prog = st.progress(0)
-            for i, code in enumerate(ARCHIVED_CODES):
-                try:
-                    data = get_proposal(code, h)["productProposal"]["data"]
-                    names[code] = data.get("title", "")
-                    # reifiedProductId가 퀸잇 상품 페이지 URL의 hash ID
-                    pid = data.get("reifiedProductId") or data.get("itemId") or ""
-                    urls[code] = f"{QUEENIT_PRODUCT_BASE}{pid}?openBy=sellerAdmin" if pid else ""
-                except Exception:
-                    names[code] = ""
-                    urls[code] = ""
-                prog.progress((i + 1) / len(ARCHIVED_CODES))
-            prog.empty()
-            st.session_state["archive_names"] = names
-            st.session_state["archive_urls"] = urls
-            archive_names = names
-
-        # 아카이브 목록 렌더링
-        archive_urls = st.session_state.get("archive_urls", {})
-        items_html = ""
-        for code in ARCHIVED_CODES:
-            url = archive_urls.get(code, "")
-            name = archive_names.get(code, "")
-            name_line = (
-                f'<div style="font-size:10px;color:#c8d4f0;margin-top:1px;'
-                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">{name}</div>'
-                if name else ""
-            )
-            if url:
-                code_html = (
-                    f'<a href="{url}" target="_blank" '
-                    f'style="color:#a78bfa;font-size:11px;font-weight:600;text-decoration:none;">'
-                    f'{code} ↗</a>'
-                )
-            else:
-                code_html = f'<span style="color:#a78bfa;font-size:11px;font-weight:600;">{code}</span>'
-
-            items_html += (
-                f'<div style="padding:6px 0;border-bottom:1px solid #2e3548;">'
-                f'{code_html}'
-                f'<div style="font-size:10px;color:#6b7a99;margin-top:2px;">'
-                f'배너 이미지 추가 · [빠른배송] 프리픽스 추가</div>'
-                f'{name_line}'
-                f'</div>'
-            )
-
         st.markdown(
-            f'<div style="max-height:400px;overflow-y:auto;padding-right:2px;">'
-            f'{items_html}'
-            f'</div>',
+            f'<div style="font-size:11px;color:#9b9da2;margin-bottom:8px;">'
+            f'[빠른배송] 적용 상품 {len(ARCHIVED_CODES)}개</div>',
             unsafe_allow_html=True,
         )
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("상품 조회", key="view_archive", use_container_width=True):
+                st.session_state["view"] = "archive"
+                st.rerun()
+        with col_b:
+            if st.button("상품명 조회", key="fetch_names", use_container_width=True):
+                if not token:
+                    st.warning("⚙ 설정에서 Seller Token을 입력하세요.")
+                else:
+                    h = make_headers(token)
+                    names, urls = {}, {}
+                    prog = st.progress(0)
+                    for i, code in enumerate(ARCHIVED_CODES):
+                        try:
+                            data = get_proposal(code, h)["productProposal"]["data"]
+                            names[code] = data.get("title", "")
+                            pid = data.get("reifiedProductId") or data.get("itemId") or ""
+                            urls[code] = f"{QUEENIT_PRODUCT_BASE}{pid}?openBy=sellerAdmin" if pid else ""
+                        except Exception:
+                            names[code] = ""
+                            urls[code] = ""
+                        prog.progress((i + 1) / len(ARCHIVED_CODES))
+                    prog.empty()
+                    st.session_state["archive_names"] = names
+                    st.session_state["archive_urls"] = urls
+                    st.success(f"상품명 {len(names)}개 로드 완료")
 
-# ── 메인: 일괄 편집 ───────────────────────────────────────────
-col_left, col_right = st.columns([2, 1])
+# ── 메인 ─────────────────────────────────────────────────────
+if st.session_state.get("view") == "archive":
+    import pandas as pd
 
-with col_left:
-    st.markdown("**대상 상품 코드**")
-    codes_input = st.text_area(
-        "상품 코드",
-        height=160,
-        placeholder="ZE26SAC008\nZE26SAC011\nZE26SAC012\n...\n\n한 줄에 하나씩 또는 쉼표로 구분",
-        label_visibility="collapsed",
+    col_title, col_back = st.columns([3, 1])
+    with col_title:
+        st.markdown(
+            '<div style="font-size:15px;font-weight:700;color:#121721;margin-bottom:4px;">'
+            '📋 작업 아카이브 · [빠른배송] 적용 상품</div>',
+            unsafe_allow_html=True,
+        )
+    with col_back:
+        if st.button("← 일괄 편집으로", key="back_to_edit"):
+            st.session_state["view"] = "edit"
+            st.rerun()
+
+    archive_names = st.session_state.get("archive_names", {})
+    archive_urls  = st.session_state.get("archive_urls", {})
+
+    rows = []
+    for code in ARCHIVED_CODES:
+        rows.append({
+            "상품 링크": archive_urls.get(code) or None,
+            "품번":     code,
+            "작업 내용": "배너 이미지 추가 · [빠른배송] 프리픽스 추가",
+            "상품명":   archive_names.get(code) or "-",
+        })
+
+    df = pd.DataFrame(rows)
+    has_urls = any(r["상품 링크"] for r in rows)
+
+    col_cfg = {
+        "작업 내용": st.column_config.TextColumn("작업 내용", width="medium"),
+        "상품명":   st.column_config.TextColumn("상품명", width="large"),
+        "품번":     st.column_config.TextColumn("품번", width="small"),
+    }
+    if has_urls:
+        col_cfg["상품 링크"] = st.column_config.LinkColumn(
+            "상품 링크", display_text="↗ 열기", width="small"
+        )
+    else:
+        col_cfg["상품 링크"] = st.column_config.TextColumn("상품 링크", width="small")
+
+    st.dataframe(
+        df[["상품 링크", "품번", "작업 내용", "상품명"]],
+        column_config=col_cfg,
+        hide_index=True,
+        use_container_width=True,
+        height=min(40 * len(ARCHIVED_CODES) + 38, 700),
     )
 
-codes = parse_codes(codes_input)
+    if not archive_names:
+        st.caption("사이드바 📋 작업 아카이브 → 상품명 조회를 누르면 상품명과 링크가 함께 표시됩니다.")
 
-with col_right:
-    st.markdown("**요약**")
-    badge_banner = '<span style="background:#f0ebfd;color:#642FE9;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-right:4px;">배너</span>' if banner_url else ""
-    badge_prefix = '<span style="background:#f0ebfd;color:#642FE9;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">프리픽스</span>' if (use_prefix and title_prefix) else ""
-    badge_none = '<span style="color:#c0c0d0;font-size:11px;">미설정</span>' if (not banner_url and not (use_prefix and title_prefix)) else ""
-    badge_mode = '<span style="background:#fff8ec;color:#f5a623;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">DRY-RUN</span>' if dry_run else '<span style="background:#edfaf4;color:#00b87a;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">실제 실행</span>'
-    st.markdown(f"""
-    <div style="background:#fff;border:1px solid #e0e0ec;border-radius:8px;padding:14px;font-size:12px;">
-      <div style="color:#9898b8;margin-bottom:6px;">상품 수</div>
-      <div style="font-size:22px;font-weight:700;color:#642FE9;">{len(codes)}<span style="font-size:13px;font-weight:400;color:#9898b8;">개</span></div>
-      <div style="margin-top:10px;color:#9898b8;">작업</div>
-      <div style="margin-top:3px;">{badge_banner}{badge_prefix}{badge_none}</div>
-      <div style="margin-top:10px;color:#9898b8;">모드</div>
-      <div style="margin-top:3px;">{badge_mode}</div>
-    </div>
-    """, unsafe_allow_html=True)
+else:
+    # ── 일괄 편집 뷰 ─────────────────────────────────────────
+    col_left, col_right = st.columns([2, 1])
 
-st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-
-can_run = bool(token and codes and (banner_url or (use_prefix and title_prefix)))
-if not can_run:
-    missing = []
-    if not token: missing.append("Seller Token")
-    if not codes: missing.append("상품 코드")
-    if not banner_url and not (use_prefix and title_prefix):
-        missing.append("배너 URL 또는 프리픽스")
-    if missing:
-        st.info(f"실행 전 필요: {', '.join(missing)}")
-
-run_label = "🔍 미리보기 실행" if dry_run else "🚀 실제 실행"
-run_btn = st.button(run_label, type="primary", disabled=not can_run)
-
-if run_btn:
-    headers = make_headers(token)
-    total = len(codes)
-    results = []
-
-    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
-    st.markdown("**진행 현황**")
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    result_table = st.empty()
-
-    for i, code in enumerate(codes):
-        status_text.markdown(
-            f'<div style="font-size:12px;color:#642FE9;margin:4px 0;">처리 중… <b>{code}</b> ({i+1}/{total})</div>',
-            unsafe_allow_html=True,
+    with col_left:
+        st.markdown("**대상 상품 코드**")
+        codes_input = st.text_area(
+            "상품 코드",
+            height=160,
+            placeholder="ZE26SAC008\nZE26SAC011\nZE26SAC012\n...\n\n한 줄에 하나씩 또는 쉼표로 구분",
+            label_visibility="collapsed",
         )
-        try:
-            resp = get_proposal(code, headers)
-            data = resp["productProposal"]["data"]
-            current_html = data.get("descriptionPageHtml") or ""
-            current_title = data.get("title", "")
 
-            changes = []
-            new_html = current_html
-            new_title = current_title
+    codes = parse_codes(codes_input)
 
-            if banner_url:
-                new_html = fix_banner(current_html, banner_url)
-                changes.append("배너 ✅")
+    with col_right:
+        st.markdown("**요약**")
+        badge_banner = '<span style="background:#f0ebfd;color:#642FE9;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-right:4px;">배너</span>' if banner_url else ""
+        badge_prefix = '<span style="background:#f0ebfd;color:#642FE9;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">프리픽스</span>' if (use_prefix and title_prefix) else ""
+        badge_none = '<span style="color:#c0c0d0;font-size:11px;">미설정</span>' if (not banner_url and not (use_prefix and title_prefix)) else ""
+        badge_mode = '<span style="background:#fff8ec;color:#f5a623;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">DRY-RUN</span>' if dry_run else '<span style="background:#edfaf4;color:#00b87a;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;">실제 실행</span>'
+        st.markdown(f"""
+        <div style="background:#fff;border:1px solid #e0e0ec;border-radius:8px;padding:14px;font-size:12px;">
+          <div style="color:#9898b8;margin-bottom:6px;">상품 수</div>
+          <div style="font-size:22px;font-weight:700;color:#642FE9;">{len(codes)}<span style="font-size:13px;font-weight:400;color:#9898b8;">개</span></div>
+          <div style="margin-top:10px;color:#9898b8;">작업</div>
+          <div style="margin-top:3px;">{badge_banner}{badge_prefix}{badge_none}</div>
+          <div style="margin-top:10px;color:#9898b8;">모드</div>
+          <div style="margin-top:3px;">{badge_mode}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            if use_prefix and title_prefix:
-                new_title, changed = fix_title(current_title, title_prefix)
-                data["title"] = new_title
-                if changed:
-                    changes.append("상품명 ✅")
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-            if not dry_run:
-                put_body = build_put_body(data, new_html)
-                save_result = save_proposal(put_body, headers)
-                submit_proposal(save_result["productProposal"]["data"]["productProposalId"], headers)
+    can_run = bool(token and codes and (banner_url or (use_prefix and title_prefix)))
+    if not can_run:
+        missing = []
+        if not token: missing.append("Seller Token")
+        if not codes: missing.append("상품 코드")
+        if not banner_url and not (use_prefix and title_prefix):
+            missing.append("배너 URL 또는 프리픽스")
+        if missing:
+            st.info(f"실행 전 필요: {', '.join(missing)}")
 
-            results.append({
-                "코드": code,
-                "상품명": f"{current_title} → {new_title}" if new_title != current_title else current_title,
-                "변경사항": ", ".join(changes) if changes else "-",
-                "상태": "✅ 완료" if not dry_run else "🔍 확인",
-            })
+    run_label = "🔍 미리보기 실행" if dry_run else "🚀 실제 실행"
+    run_btn = st.button(run_label, type="primary", disabled=not can_run)
 
-        except requests.HTTPError as e:
-            results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ HTTP {e.response.status_code}"})
-        except Exception as e:
-            results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ {str(e)[:60]}"})
+    if run_btn:
+        headers = make_headers(token)
+        total = len(codes)
+        results = []
 
-        progress_bar.progress((i + 1) / total)
-        result_table.dataframe(results, use_container_width=True, hide_index=True)
+        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+        st.markdown("**진행 현황**")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        result_table = st.empty()
 
-        if i < total - 1:
-            time.sleep(delay)
+        for i, code in enumerate(codes):
+            status_text.markdown(
+                f'<div style="font-size:12px;color:#642FE9;margin:4px 0;">처리 중… <b>{code}</b> ({i+1}/{total})</div>',
+                unsafe_allow_html=True,
+            )
+            try:
+                resp = get_proposal(code, headers)
+                data = resp["productProposal"]["data"]
+                current_html = data.get("descriptionPageHtml") or ""
+                current_title = data.get("title", "")
 
-    status_text.empty()
-    success = sum(1 for r in results if "❌" not in r["상태"])
-    fail = total - success
+                changes = []
+                new_html = current_html
+                new_title = current_title
 
-    if dry_run:
-        st.success(f"미리보기 완료: {total}개 상품 조회 성공")
-        st.info("실제 반영하려면 사이드바에서 Dry-run 토글을 끄고 다시 실행하세요.")
-    else:
-        if fail == 0:
-            st.success(f"완료! {success}개 성공 / {fail}개 실패")
+                if banner_url:
+                    new_html = fix_banner(current_html, banner_url)
+                    changes.append("배너 ✅")
+
+                if use_prefix and title_prefix:
+                    new_title, changed = fix_title(current_title, title_prefix)
+                    data["title"] = new_title
+                    if changed:
+                        changes.append("상품명 ✅")
+
+                if not dry_run:
+                    put_body = build_put_body(data, new_html)
+                    save_result = save_proposal(put_body, headers)
+                    submit_proposal(save_result["productProposal"]["data"]["productProposalId"], headers)
+
+                results.append({
+                    "코드": code,
+                    "상품명": f"{current_title} → {new_title}" if new_title != current_title else current_title,
+                    "변경사항": ", ".join(changes) if changes else "-",
+                    "상태": "✅ 완료" if not dry_run else "🔍 확인",
+                })
+
+            except requests.HTTPError as e:
+                results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ HTTP {e.response.status_code}"})
+            except Exception as e:
+                results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ {str(e)[:60]}"})
+
+            progress_bar.progress((i + 1) / total)
+            result_table.dataframe(results, use_container_width=True, hide_index=True)
+
+            if i < total - 1:
+                time.sleep(delay)
+
+        status_text.empty()
+        success = sum(1 for r in results if "❌" not in r["상태"])
+        fail = total - success
+
+        if dry_run:
+            st.success(f"미리보기 완료: {total}개 상품 조회 성공")
+            st.info("실제 반영하려면 사이드바에서 Dry-run 토글을 끄고 다시 실행하세요.")
         else:
-            st.warning(f"완료: {success}개 성공 / {fail}개 실패")
+            if fail == 0:
+                st.success(f"완료! {success}개 성공 / {fail}개 실패")
+            else:
+                st.warning(f"완료: {success}개 성공 / {fail}개 실패")
