@@ -41,10 +41,10 @@ def get_cat_label(code: str) -> str:
     cat = get_cat_code(code)
     return CATEGORY_LABELS.get(cat, cat)
 
-def query_stock(creds_json: str):
+def query_stock():
     from google.oauth2 import service_account
     from google.cloud import bigquery
-    info = json.loads(creds_json)
+    info = dict(st.secrets["gcp_service_account"])
     creds = service_account.Credentials.from_service_account_info(
         info, scopes=["https://www.googleapis.com/auth/bigquery"]
     )
@@ -412,20 +412,6 @@ with st.sidebar:
         dry_run = st.toggle("Dry-run (미리보기)", value=True, help="실제 변경 없이 조회만 수행")
         delay = st.slider("요청 간 딜레이 (초)", 0.2, 2.0, 0.5, 0.1)
 
-    with st.expander("🔑 BigQuery 인증", expanded=False):
-        st.markdown(
-            '<div style="font-size:11px;color:#9b9da2;margin-bottom:6px;">'
-            'GCP 서비스 계정 JSON 키를 붙여넣으세요.<br>'
-            '아카이브 탭의 재고 조회에 사용됩니다.</div>',
-            unsafe_allow_html=True,
-        )
-        gcp_creds = st.text_area(
-            "Service Account JSON",
-            height=80,
-            placeholder='{"type": "service_account", "project_id": "...", ...}',
-            label_visibility="collapsed",
-            help="GCP Console → IAM → 서비스 계정 → 키 만들기 → JSON",
-        )
 
 # ── API 함수 ───────────────────────────────────────────────────
 import re
@@ -647,15 +633,9 @@ with tab_archive:
     stock_df = st.session_state.get("stock_df", None)
     col_btn, col_info = st.columns([1, 3])
     with col_btn:
-        fetch_btn = st.button("🔄 재고 조회", disabled=not bool(gcp_creds))
+        fetch_btn = st.button("🔄 재고 조회")
     with col_info:
-        if not gcp_creds:
-            st.markdown(
-                '<div style="font-size:11px;color:#9898b8;padding-top:8px;">'
-                '사이드바 🔑 BigQuery 인증에 Service Account JSON을 입력하면 재고를 조회할 수 있습니다.</div>',
-                unsafe_allow_html=True,
-            )
-        elif "stock_refreshed_at" in st.session_state:
+        if "stock_refreshed_at" in st.session_state:
             st.markdown(
                 f'<div style="font-size:11px;color:#9898b8;padding-top:8px;">'
                 f'마지막 조회: {st.session_state["stock_refreshed_at"]}</div>',
@@ -665,7 +645,7 @@ with tab_archive:
     if fetch_btn:
         with st.spinner("BigQuery에서 재고 조회 중…"):
             try:
-                stock_df = query_stock(gcp_creds)
+                stock_df = query_stock()
                 st.session_state["stock_df"] = stock_df
                 st.session_state["stock_refreshed_at"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
             except Exception as e:
