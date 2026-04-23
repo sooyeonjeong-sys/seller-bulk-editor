@@ -30,8 +30,7 @@ ARCHIVED_CODES = [
     "ZE26STS007","ZE26STS900","ZE26STS901",
 ]
 
-# 퀸잇 상품 판매 페이지 URL (상품코드 기반)
-QUEENIT_PRODUCT_URL = "https://www.queenit.kr/product/{code}"
+QUEENIT_PRODUCT_BASE = "https://web.queenit.kr/product/"
 
 BASE_URL = "https://seller.api.queenit.kr"
 
@@ -469,33 +468,47 @@ with st.sidebar:
         if fetch_names_btn:
             h = make_headers(token)
             names = {}
+            urls = {}
             prog = st.progress(0)
             for i, code in enumerate(ARCHIVED_CODES):
                 try:
                     data = get_proposal(code, h)["productProposal"]["data"]
                     names[code] = data.get("title", "")
+                    # reifiedProductId가 퀸잇 상품 페이지 URL의 hash ID
+                    pid = data.get("reifiedProductId") or data.get("itemId") or ""
+                    urls[code] = f"{QUEENIT_PRODUCT_BASE}{pid}?openBy=sellerAdmin" if pid else ""
                 except Exception:
                     names[code] = ""
+                    urls[code] = ""
                 prog.progress((i + 1) / len(ARCHIVED_CODES))
             prog.empty()
             st.session_state["archive_names"] = names
+            st.session_state["archive_urls"] = urls
             archive_names = names
 
         # 아카이브 목록 렌더링
+        archive_urls = st.session_state.get("archive_urls", {})
         items_html = ""
         for code in ARCHIVED_CODES:
-            url = QUEENIT_PRODUCT_URL.format(code=code)
+            url = archive_urls.get(code, "")
             name = archive_names.get(code, "")
             name_line = (
                 f'<div style="font-size:10px;color:#c8d4f0;margin-top:1px;'
                 f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">{name}</div>'
                 if name else ""
             )
+            if url:
+                code_html = (
+                    f'<a href="{url}" target="_blank" '
+                    f'style="color:#a78bfa;font-size:11px;font-weight:600;text-decoration:none;">'
+                    f'{code} ↗</a>'
+                )
+            else:
+                code_html = f'<span style="color:#a78bfa;font-size:11px;font-weight:600;">{code}</span>'
+
             items_html += (
                 f'<div style="padding:6px 0;border-bottom:1px solid #2e3548;">'
-                f'<a href="{url}" target="_blank" '
-                f'style="color:#a78bfa;font-size:11px;font-weight:600;text-decoration:none;">'
-                f'{code} ↗</a>'
+                f'{code_html}'
                 f'<div style="font-size:10px;color:#6b7a99;margin-top:2px;">'
                 f'배너 이미지 추가 · [빠른배송] 프리픽스 추가</div>'
                 f'{name_line}'
