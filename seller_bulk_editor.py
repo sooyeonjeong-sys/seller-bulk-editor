@@ -457,38 +457,31 @@ with st.sidebar:
             f'[빠른배송] 적용 상품 {len(ARCHIVED_CODES)}개</div>',
             unsafe_allow_html=True,
         )
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("상품 조회", key="view_archive", use_container_width=True):
+        if st.button("상품 조회", key="view_archive", use_container_width=True):
+            if not token:
+                st.warning("⚙ 설정에서 Seller Token을 먼저 입력하세요.")
+            else:
+                h = make_headers(token)
+                names, urls = {}, {}
+                prog = st.progress(0)
+                for i, code in enumerate(ARCHIVED_CODES):
+                    try:
+                        data = get_proposal(code, h)["productProposal"]["data"]
+                        names[code] = data.get("title", "")
+                        pid = data.get("reifiedProductId") or data.get("itemId") or ""
+                        urls[code] = f"{QUEENIT_PRODUCT_BASE}{pid}?openBy=sellerAdmin" if pid else ""
+                    except Exception:
+                        names[code] = ""
+                        urls[code] = ""
+                    prog.progress((i + 1) / len(ARCHIVED_CODES))
+                prog.empty()
+                st.session_state["archive_names"] = names
+                st.session_state["archive_urls"] = urls
                 st.session_state["view"] = "archive"
                 st.rerun()
-        with col_b:
-            if st.button("상품명 조회", key="fetch_names", use_container_width=True):
-                if not token:
-                    st.warning("⚙ 설정에서 Seller Token을 입력하세요.")
-                else:
-                    h = make_headers(token)
-                    names, urls = {}, {}
-                    prog = st.progress(0)
-                    for i, code in enumerate(ARCHIVED_CODES):
-                        try:
-                            data = get_proposal(code, h)["productProposal"]["data"]
-                            names[code] = data.get("title", "")
-                            pid = data.get("reifiedProductId") or data.get("itemId") or ""
-                            urls[code] = f"{QUEENIT_PRODUCT_BASE}{pid}?openBy=sellerAdmin" if pid else ""
-                        except Exception:
-                            names[code] = ""
-                            urls[code] = ""
-                        prog.progress((i + 1) / len(ARCHIVED_CODES))
-                    prog.empty()
-                    st.session_state["archive_names"] = names
-                    st.session_state["archive_urls"] = urls
-                    st.success(f"상품명 {len(names)}개 로드 완료")
 
 # ── 메인 ─────────────────────────────────────────────────────
 if st.session_state.get("view") == "archive":
-    import pandas as pd
-
     col_title, col_back = st.columns([3, 1])
     with col_title:
         st.markdown(
@@ -504,40 +497,38 @@ if st.session_state.get("view") == "archive":
     archive_names = st.session_state.get("archive_names", {})
     archive_urls  = st.session_state.get("archive_urls", {})
 
-    rows = []
-    for code in ARCHIVED_CODES:
-        rows.append({
-            "상품 링크": archive_urls.get(code) or None,
-            "품번":     code,
-            "작업 내용": "배너 이미지 추가 · [빠른배송] 프리픽스 추가",
-            "상품명":   archive_names.get(code) or "-",
-        })
-
-    df = pd.DataFrame(rows)
-    has_urls = any(r["상품 링크"] for r in rows)
-
-    col_cfg = {
-        "작업 내용": st.column_config.TextColumn("작업 내용", width="medium"),
-        "상품명":   st.column_config.TextColumn("상품명", width="large"),
-        "품번":     st.column_config.TextColumn("품번", width="small"),
-    }
-    if has_urls:
-        col_cfg["상품 링크"] = st.column_config.LinkColumn(
-            "상품 링크", display_text="↗ 열기", width="small"
+    rows_html = ""
+    for i, code in enumerate(ARCHIVED_CODES):
+        name = archive_names.get(code, "")
+        url  = archive_urls.get(code, "")
+        bg   = "#ffffff" if i % 2 == 0 else "#faf9fd"
+        code_cell = (
+            f'<a href="{url}" target="_blank" '
+            f'style="color:#642FE9;font-weight:600;text-decoration:none;">{code} ↗</a>'
+            if url else
+            f'<span style="color:#642FE9;font-weight:600;">{code}</span>'
         )
-    else:
-        col_cfg["상품 링크"] = st.column_config.TextColumn("상품 링크", width="small")
+        detail = f"변경된 상품명: {name}" if name else "-"
+        rows_html += (
+            f'<tr style="background:{bg};">'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e0e0ec;white-space:nowrap;">{code_cell}</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e0e0ec;color:#4a4a6a;font-size:12px;">배너 이미지 추가 · [빠른배송] 프리픽스 추가</td>'
+            f'<td style="padding:8px 12px;border-bottom:1px solid #e0e0ec;color:#2a2a4a;font-size:12px;">{detail}</td>'
+            f'</tr>'
+        )
 
-    st.dataframe(
-        df[["상품 링크", "품번", "작업 내용", "상품명"]],
-        column_config=col_cfg,
-        hide_index=True,
-        use_container_width=True,
-        height=min(40 * len(ARCHIVED_CODES) + 38, 700),
+    st.markdown(
+        f'<div style="border:1px solid #e0e0ec;border-radius:8px;overflow:hidden;">'
+        f'<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        f'<thead><tr style="background:#f0ebfd;">'
+        f'<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#642FE9;letter-spacing:0.05em;white-space:nowrap;">품번</th>'
+        f'<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#642FE9;letter-spacing:0.05em;">작업 내용</th>'
+        f'<th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:#642FE9;letter-spacing:0.05em;">작업 내용 상세</th>'
+        f'</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        f'</table></div>',
+        unsafe_allow_html=True,
     )
-
-    if not archive_names:
-        st.caption("사이드바 📋 작업 아카이브 → 상품명 조회를 누르면 상품명과 링크가 함께 표시됩니다.")
 
 else:
     # ── 일괄 편집 뷰 ─────────────────────────────────────────
