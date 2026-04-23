@@ -463,9 +463,12 @@ with st.sidebar:
                 unsafe_allow_html=True,
             )
         with col_b:
-            fetch_names_btn = st.button("상품명 조회", key="fetch_names", disabled=not bool(token))
+            fetch_names_btn = st.button("상품명 조회", key="fetch_names")
 
         if fetch_names_btn:
+            if not token:
+                st.warning("⚙ 설정에서 Seller Token을 먼저 입력하세요.")
+                st.stop()
             h = make_headers(token)
             names = {}
             urls = {}
