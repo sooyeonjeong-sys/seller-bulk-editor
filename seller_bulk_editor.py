@@ -59,6 +59,14 @@ def submit_proposal(proposal_id: int, headers: dict) -> None:
     r = requests.post(f"{BASE_URL}/seller/product-proposals/{proposal_id}/submit", headers=headers, timeout=30)
     r.raise_for_status()
 
+def http_error_detail(ex: requests.HTTPError) -> str:
+    """HTTPError 응답 body에서 메시지 추출"""
+    try:
+        body = ex.response.json()
+        return body.get("message") or body.get("error") or str(body)[:120]
+    except Exception:
+        return (ex.response.text or "")[:120]
+
 def fix_banner(html: str, new_url: str) -> str:
     tag = f'<img src="{new_url}" style="width:100%;display:block;" />'
     h = html or ""
@@ -1045,11 +1053,37 @@ else:
                         if not dry_run:
                             original_data = copy.deepcopy(data)
                             put_body = build_put_body(data, new_html)
-                            save_result = save_proposal(put_body, headers)
-                            submit_proposal(
-                                save_result["productProposal"]["data"]["productProposalId"],
-                                headers,
-                            )
+                            try:
+                                save_result = save_proposal(put_body, headers)
+                            except requests.HTTPError as ex:
+                                detail = http_error_detail(ex)
+                                br_results.append({
+                                    "코드": code, "상품명": current_title,
+                                    "변경사항": "배너 제거",
+                                    "상태": f"❌ save HTTP {ex.response.status_code}: {detail}",
+                                })
+                                br_progress.progress((i + 1) / total_br)
+                                br_table.dataframe(br_results, use_container_width=True, hide_index=True)
+                                if i < total_br - 1:
+                                    time.sleep(delay)
+                                continue
+                            try:
+                                submit_proposal(
+                                    save_result["productProposal"]["data"]["productProposalId"],
+                                    headers,
+                                )
+                            except requests.HTTPError as ex:
+                                detail = http_error_detail(ex)
+                                br_results.append({
+                                    "코드": code, "상품명": current_title,
+                                    "변경사항": "배너 제거",
+                                    "상태": f"❌ submit HTTP {ex.response.status_code}: {detail}",
+                                })
+                                br_progress.progress((i + 1) / total_br)
+                                br_table.dataframe(br_results, use_container_width=True, hide_index=True)
+                                if i < total_br - 1:
+                                    time.sleep(delay)
+                                continue
                             br_snapshot_entries.append({
                                 "code": code,
                                 "original_title": current_title,
@@ -1064,7 +1098,8 @@ else:
                         })
 
                 except requests.HTTPError as ex:
-                    br_results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ HTTP {ex.response.status_code}"})
+                    detail = http_error_detail(ex)
+                    br_results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ HTTP {ex.response.status_code}: {detail}"})
                 except Exception as ex:
                     br_results.append({"코드": code, "상품명": "-", "변경사항": "-", "상태": f"❌ {str(ex)[:60]}"})
 
