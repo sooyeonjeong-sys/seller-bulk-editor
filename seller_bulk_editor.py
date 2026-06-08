@@ -75,8 +75,9 @@ def fix_banner(html: str, new_url: str) -> str:
     return tag + h
 
 def strip_banner(html: str) -> tuple[str, bool]:
+    """HTML 최상단 <img> 태그 하나를 제거 (URL·스타일 무관)"""
     h = html or ""
-    new_h = re.sub(r'^(?:<img src="[^"]*" style="width:100%;display:block;" />)+', '', h)
+    new_h = re.sub(r'^<img[^>]*>', '', h, count=1)
     return new_h, new_h != h
 
 def strip_prefix(title: str, prefix: str = "[빠른배송]") -> tuple[str, bool]:
