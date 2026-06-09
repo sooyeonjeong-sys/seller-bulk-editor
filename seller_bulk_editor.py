@@ -43,6 +43,9 @@ def parse_codes(text: str) -> list[str]:
     return [c.strip() for c in re.split(r"[\n,]+", text) if c.strip()]
 
 def make_headers(t: str) -> dict:
+    t = t.strip()
+    if t.lower().startswith("bearer "):
+        t = t[7:].strip()
     return {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}
 
 def get_proposal(code: str, headers: dict) -> dict:
@@ -481,6 +484,25 @@ with st.sidebar:
             placeholder="Bearer 토큰을 입력하세요",
             help="Seller Admin → 개발자도구 Network → Authorization: Bearer {값}",
         )
+        if token and st.button("🔑 토큰 테스트", key="test_token", use_container_width=True):
+            try:
+                h = make_headers(token)
+                r = requests.get(
+                    f"{BASE_URL}/seller/product-proposals",
+                    params={"mallProductCode": "TEST"},
+                    headers=h,
+                    timeout=10,
+                )
+                if r.status_code in (200, 404, 400):
+                    body = r.json() if r.content else {}
+                    if body.get("code") == "1003":
+                        st.error("❌ 토큰 인증 실패 (1003). 토큰을 다시 확인하세요.")
+                    else:
+                        st.success("✅ 토큰 유효")
+                else:
+                    st.error(f"❌ HTTP {r.status_code}")
+            except Exception as ex:
+                st.error(f"❌ {str(ex)[:80]}")
 
     with st.expander("🖼 배너 이미지", expanded=True):
         banner_url = st.text_input(
