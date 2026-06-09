@@ -520,7 +520,8 @@ with st.sidebar:
         dry_run = st.toggle("Dry-run (미리보기)", value=True, help="실제 변경 없이 조회만 수행")
         delay = st.slider("요청 간 딜레이 (초)", 0.2, 2.0, 0.5, 0.1)
 
-    with st.expander("🔄 롤백", expanded=False):
+    _has_rollback = bool(st.session_state.get("last_snapshot") or load_rollback_files())
+    with st.expander("🔄 롤백", expanded=_has_rollback):
         _rb_files = load_rollback_files()
         _snap = st.session_state.get("last_snapshot")
         # 현재 세션 스냅샷(파일 미저장) + 과거 JSON 파일 병합
@@ -973,16 +974,26 @@ else:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     snapshot = {"timestamp": ts, "entries": snapshot_entries}
                     st.session_state["last_snapshot"] = snapshot
-                    os.makedirs(ROLLBACK_DIR, exist_ok=True)
-                    fname = f"rollback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                    with open(os.path.join(ROLLBACK_DIR, fname), "w", encoding="utf-8") as fp:
-                        json.dump(snapshot, fp, ensure_ascii=False, indent=2)
-                    st.markdown(
-                        f'<div style="margin-top:12px;padding:10px 14px;background:#fff8ec;'
-                        f'border:1px solid #f5a623;border-radius:8px;font-size:12px;color:#7a4c00;">'
-                        f'⏮ 작업을 되돌리려면 사이드바 <b>🔄 롤백</b> 섹션을 이용하세요.</div>',
-                        unsafe_allow_html=True,
-                    )
+                    try:
+                        os.makedirs(ROLLBACK_DIR, exist_ok=True)
+                        fname = f"rollback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                        with open(os.path.join(ROLLBACK_DIR, fname), "w", encoding="utf-8") as fp:
+                            json.dump(snapshot, fp, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                    _e_col1, _e_col2 = st.columns([3, 1])
+                    with _e_col1:
+                        st.markdown(
+                            f'<div style="padding:10px 14px;background:#fff8ec;'
+                            f'border:1px solid #f5a623;border-radius:8px;font-size:12px;color:#7a4c00;">'
+                            f'⏮ {len(snapshot_entries)}개 상품이 변경되었습니다.</div>',
+                            unsafe_allow_html=True,
+                        )
+                    with _e_col2:
+                        if st.button("↩ 지금 롤백", key="edit_instant_rollback", use_container_width=True):
+                            st.session_state["selected_rollback"] = snapshot
+                            st.session_state["view"] = "rollback"
+                            st.rerun()
 
     # ── 배너 제거 탭 ─────────────────────────────────────────
     with tab_banner_remove:
@@ -1148,13 +1159,23 @@ else:
                     ts_br = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     snapshot_br = {"timestamp": ts_br, "entries": br_snapshot_entries}
                     st.session_state["last_snapshot"] = snapshot_br
-                    os.makedirs(ROLLBACK_DIR, exist_ok=True)
-                    fname_br = f"rollback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                    with open(os.path.join(ROLLBACK_DIR, fname_br), "w", encoding="utf-8") as fp:
-                        json.dump(snapshot_br, fp, ensure_ascii=False, indent=2)
-                    st.markdown(
-                        f'<div style="margin-top:12px;padding:10px 14px;background:#fff8ec;'
-                        f'border:1px solid #f5a623;border-radius:8px;font-size:12px;color:#7a4c00;">'
-                        f'⏮ 작업을 되돌리려면 사이드바 <b>🔄 롤백</b> 섹션을 이용하세요.</div>',
-                        unsafe_allow_html=True,
-                    )
+                    try:
+                        os.makedirs(ROLLBACK_DIR, exist_ok=True)
+                        fname_br = f"rollback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                        with open(os.path.join(ROLLBACK_DIR, fname_br), "w", encoding="utf-8") as fp:
+                            json.dump(snapshot_br, fp, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                    _rb_col1, _rb_col2 = st.columns([3, 1])
+                    with _rb_col1:
+                        st.markdown(
+                            f'<div style="padding:10px 14px;background:#fff8ec;'
+                            f'border:1px solid #f5a623;border-radius:8px;font-size:12px;color:#7a4c00;">'
+                            f'⏮ {len(br_snapshot_entries)}개 상품이 변경되었습니다.</div>',
+                            unsafe_allow_html=True,
+                        )
+                    with _rb_col2:
+                        if st.button("↩ 지금 롤백", key="br_instant_rollback", use_container_width=True):
+                            st.session_state["selected_rollback"] = snapshot_br
+                            st.session_state["view"] = "rollback"
+                            st.rerun()
